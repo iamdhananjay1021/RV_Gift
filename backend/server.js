@@ -122,7 +122,7 @@ import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
-import reviewRoutes from "./routes/reviewRoutes.js";
+import reviewRoutes from "./routes/reviewroutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 
 dotenv.config();
