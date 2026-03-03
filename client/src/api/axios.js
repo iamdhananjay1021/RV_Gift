@@ -111,10 +111,48 @@
 
 import axios from "axios";
 
+/* ===============================
+   BASE URL (ENV SAFE)
+=============================== */
+const baseURL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:9000/api";
+
+/* ===============================
+   AXIOS INSTANCE
+=============================== */
 const api = axios.create({
-    baseURL: "https://rv-gift-backend.onrender.com/api",
-    timeout: 15000,
-    withCredentials: true,
+  baseURL,
+  timeout: 15000,
 });
+
+/* ===============================
+   ATTACH TOKEN
+=============================== */
+api.interceptors.request.use((config) => {
+  const stored = localStorage.getItem("auth");
+
+  if (stored) {
+    const { token } = JSON.parse(stored);
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  return config;
+});
+
+/* ===============================
+   RESPONSE HANDLER
+=============================== */
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem("auth");
+    }
+    return Promise.reject(err);
+  }
+);
 
 export default api;
