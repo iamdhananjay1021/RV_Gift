@@ -24,9 +24,7 @@ connectDB();
 const app = express();
 
 /* =========================
-   🛡️ SECURITY
-========================= */
-app.use(helmet());
+
 
 /* =========================
    🌐 CORS CONFIG (PRODUCTION SAFE)
@@ -35,18 +33,34 @@ const allowedOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(",")
     : ["http://localhost:5173"];
 
-app.use(
-    cors({
-        origin: (origin, callback) => {
-            if (!origin) return callback(null, true);
-            if (allowedOrigins.includes(origin)) return callback(null, true);
+// app.use(
+//     cors({
+//         origin: (origin, callback) => {
+//             if (!origin) return callback(null, true);
+//             if (allowedOrigins.includes(origin)) return callback(null, true);
 
-            console.warn("❌ CORS blocked:", origin);
-            callback(new Error("CORS not allowed"));
-        },
-        credentials: true,
-    })
-);
+//             console.warn("❌ CORS blocked:", origin);
+//             callback(new Error("CORS not allowed"));
+//         },
+//         credentials: true,
+//     })
+// );
+
+
+app.use(cors({
+    origin: true,
+    credentials: true,
+}));
+
+
+//    🛡️ SECURITY
+// ========================= */
+app.use(helmet());
+
+
+app.get("/api/test-cors", (req, res) => {
+    res.json({ message: "CORS TEST WORKING" });
+});
 
 /* =========================
    🧩 BODY PARSERS
