@@ -9,11 +9,16 @@ const Admin = () => {
     const { admin, logout } = useAdminAuth();
     const navigate = useNavigate();
 
-    const handleLogout = () => {
-        logout();
-        navigate("/admin/login");
-    };
+    // PEHLE
+    // const handleLogout = () => {
+    //     logout();
+    //     navigate("/admin/login"); // ❌ hata do
+    // };
 
+    // BAAD MEIN
+    const handleLogout = () => {
+        logout(); // ✅ bas itna
+    };
     const navItems = [
         { to: ".", end: true, icon: <FaThLarge size={14} />, label: "Dashboard" },
         { to: "products", icon: <FaBox size={14} />, label: "Products" },

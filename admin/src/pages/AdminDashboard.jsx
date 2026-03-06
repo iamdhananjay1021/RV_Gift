@@ -13,17 +13,29 @@ const AdminDashboard = () => {
     const [customerLocations, setCustomerLocations] = useState([]);
     const [cityStats, setCityStats] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const { data: orders } = await api.get("/orders");
-                const { data: products } = await api.get("/products");
-                const { data: users } = await api.get("/auth/users").catch(() => ({ data: [] }));
+                setFetchError(null);
 
-                const list = Array.isArray(orders) ? orders : [];
-                const prodList = Array.isArray(products) ? products : [];
-                const userList = Array.isArray(users) ? users : [];
+                // ✅ Orders aur products parallel fetch karo
+                // ✅ Agar 401 aaye toh catch mein handle hoga — logout nahi hoga immediately
+                const [ordersRes, productsRes] = await Promise.all([
+                    api.get("/orders").catch(err => {
+                        console.error("Dashboard fetch error:", err.message);
+                        // ✅ 401 error ko silently handle karo — interceptor already handle kar raha hai
+                        return { data: [] };
+                    }),
+                    api.get("/products").catch(() => ({ data: [] })),
+                ]);
+
+                const usersRes = await api.get("/auth/users").catch(() => ({ data: [] }));
+
+                const list = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+                const prodList = Array.isArray(productsRes.data) ? productsRes.data : [];
+                const userList = Array.isArray(usersRes.data) ? usersRes.data : [];
 
                 const delivered = list.filter(o => o.orderStatus === "DELIVERED");
                 const pending = list.filter(o => o.orderStatus === "PLACED");
@@ -40,11 +52,9 @@ const AdminDashboard = () => {
 
                 setRecentOrders(list.slice(0, 5));
 
-                // ✅ Customer locations
                 const withLocation = userList.filter(u => u.location?.latitude && u.location?.city);
                 setCustomerLocations(withLocation);
 
-                // ✅ City-wise count
                 const cityMap = {};
                 withLocation.forEach(u => {
                     const city = u.location.city;
@@ -59,7 +69,11 @@ const AdminDashboard = () => {
                 setCityStats(sorted);
 
             } catch (err) {
-                console.error(err);
+                console.error("Dashboard error:", err);
+                // ✅ 401 error pe fetchError set karo — logout interceptor handle karega
+                if (err.response?.status !== 401) {
+                    setFetchError("Data load karne mein problem hui. Refresh karo.");
+                }
             } finally {
                 setLoading(false);
             }
@@ -78,11 +92,9 @@ const AdminDashboard = () => {
 
     const maxCount = cityStats[0]?.count || 1;
 
-    // Shop location — Lucknow
     const SHOP_LAT = 26.8467;
     const SHOP_LNG = 80.9462;
 
-    // Convert lat/lng to map percentage position
     const toMapPos = (lat, lng) => {
         const MAP_BOUNDS = { minLat: 8, maxLat: 37, minLng: 68, maxLng: 97 };
         const x = ((lng - MAP_BOUNDS.minLng) / (MAP_BOUNDS.maxLng - MAP_BOUNDS.minLng)) * 100;
@@ -111,6 +123,13 @@ const AdminDashboard = () => {
                         <FaPlus size={11} /> Add Product
                     </Link>
                 </div>
+
+                {/* ✅ Error Banner */}
+                {fetchError && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-medium">
+                        ⚠️ {fetchError}
+                    </div>
+                )}
 
                 {/* ── Stats Grid ── */}
                 {loading ? (
@@ -159,15 +178,12 @@ const AdminDashboard = () => {
 
                 {/* ── LOCATION SECTION ── */}
                 <div className="grid md:grid-cols-2 gap-5">
-
-                    {/* ── City-wise Bar Chart ── */}
                     <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
                         <div className="px-5 py-4 border-b border-stone-100 flex items-center gap-2">
                             <FaMapMarkerAlt className="text-amber-500" size={13} />
                             <h2 className="font-black text-zinc-800 text-sm">Customers by City</h2>
                             <span className="ml-auto text-xs text-zinc-400">{customerLocations.length} tracked</span>
                         </div>
-
                         <div className="p-5">
                             {cityStats.length === 0 ? (
                                 <div className="text-center py-8">
@@ -196,7 +212,6 @@ const AdminDashboard = () => {
                         </div>
                     </div>
 
-                    {/* ── India Map with Pins ── */}
                     <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
                         <div className="px-5 py-4 border-b border-stone-100 flex items-center gap-2">
                             <FaMapMarkerAlt className="text-red-500" size={13} />
@@ -206,25 +221,14 @@ const AdminDashboard = () => {
                                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Customer</span>
                             </div>
                         </div>
-
                         <div className="p-4">
-                            {/* India SVG Map */}
                             <div className="relative w-full" style={{ paddingBottom: "100%" }}>
                                 <div className="absolute inset-0">
-                                    <svg
-                                        viewBox="0 0 400 450"
-                                        className="w-full h-full"
-                                        style={{ background: "#f0f9ff" }}
-                                    >
-                                        {/* India outline — simplified */}
+                                    <svg viewBox="0 0 400 450" className="w-full h-full" style={{ background: "#f0f9ff" }}>
                                         <path
                                             d="M160,20 L200,15 L240,25 L270,40 L290,70 L300,100 L310,130 L320,160 L315,190 L310,220 L300,250 L285,275 L265,295 L250,320 L240,345 L230,370 L220,390 L210,410 L200,425 L190,410 L180,390 L170,365 L158,340 L145,315 L130,290 L115,265 L105,240 L95,210 L88,180 L85,150 L88,120 L95,95 L110,70 L130,50 L160,20 Z"
-                                            fill="#e0f2fe"
-                                            stroke="#94a3b8"
-                                            strokeWidth="1.5"
+                                            fill="#e0f2fe" stroke="#94a3b8" strokeWidth="1.5"
                                         />
-
-                                        {/* Grid lines */}
                                         {[...Array(5)].map((_, i) => (
                                             <line key={`h${i}`} x1="80" y1={80 + i * 70} x2="325" y2={80 + i * 70}
                                                 stroke="#e2e8f0" strokeWidth="0.5" strokeDasharray="4,4" />
@@ -233,15 +237,11 @@ const AdminDashboard = () => {
                                             <line key={`v${i}`} x1={100 + i * 50} y1="20" x2={100 + i * 50} y2="430"
                                                 stroke="#e2e8f0" strokeWidth="0.5" strokeDasharray="4,4" />
                                         ))}
-
-                                        {/* ✅ SHOP PIN — Lucknow */}
                                         <g transform={`translate(${80 + shopPos.x * 2.45}, ${20 + shopPos.y * 4.1})`}>
                                             <circle r="8" fill="#f59e0b" stroke="white" strokeWidth="2" />
                                             <text y="4" textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">S</text>
                                             <text y="-12" textAnchor="middle" fontSize="7" fill="#92400e" fontWeight="bold">Shop</text>
                                         </g>
-
-                                        {/* ✅ CUSTOMER PINS */}
                                         {customerLocations.slice(0, 20).map((user, i) => {
                                             const pos = toMapPos(user.location.latitude, user.location.longitude);
                                             const x = 80 + pos.x * 2.45;
@@ -252,8 +252,6 @@ const AdminDashboard = () => {
                                                 </g>
                                             );
                                         })}
-
-                                        {/* City labels */}
                                         {[
                                             { name: "Delhi", lat: 28.6, lng: 77.2 },
                                             { name: "Mumbai", lat: 19.0, lng: 72.8 },
@@ -264,21 +262,14 @@ const AdminDashboard = () => {
                                             const pos = toMapPos(lat, lng);
                                             return (
                                                 <text key={name}
-                                                    x={80 + pos.x * 2.45}
-                                                    y={20 + pos.y * 4.1 + 14}
-                                                    textAnchor="middle"
-                                                    fontSize="6"
-                                                    fill="#64748b"
-                                                    fontWeight="500"
-                                                >
-                                                    {name}
-                                                </text>
+                                                    x={80 + pos.x * 2.45} y={20 + pos.y * 4.1 + 14}
+                                                    textAnchor="middle" fontSize="6" fill="#64748b" fontWeight="500"
+                                                >{name}</text>
                                             );
                                         })}
                                     </svg>
                                 </div>
                             </div>
-
                             <p className="text-xs text-zinc-400 text-center mt-2">
                                 🟡 Shop (Lucknow) &nbsp;|&nbsp; 🔵 Customers ({customerLocations.length})
                             </p>

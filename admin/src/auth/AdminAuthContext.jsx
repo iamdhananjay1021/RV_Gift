@@ -21,7 +21,7 @@ export const AdminAuthProvider = ({ children }) => {
         } catch {
             localStorage.removeItem("adminAuth");
         } finally {
-            setLoading(false); // ✅ ALWAYS runs
+            setLoading(false);
         }
     }, []);
 
@@ -39,12 +39,15 @@ export const AdminAuthProvider = ({ children }) => {
         };
         localStorage.setItem("adminAuth", JSON.stringify(adminData));
         setAdmin(adminData);
+
+        // ✅ Token set hone ka wait karo
+        await new Promise(resolve => setTimeout(resolve, 100));
     };
 
     const logout = () => {
         localStorage.removeItem("adminAuth");
         setAdmin(null);
-        window.location.href = "/admin/login";
+        // ✅ window.location nahi — AdminRoute khud /admin/login pe redirect karega
     };
 
     return (

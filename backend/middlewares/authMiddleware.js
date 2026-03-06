@@ -1,6 +1,17 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+// ✅ Admin model bhi import karo — adjust path as per your project
+// Agar aapka Admin alag model hai toh yeh use hoga
+let Admin;
+try {
+    // Dynamic import — agar Admin model exist karta hai toh use karo
+    const adminModule = await import("../models/Admin.js").catch(() => null);
+    Admin = adminModule?.default || null;
+} catch {
+    Admin = null;
+}
+
 /* =========================
    PROTECT (LOGIN REQUIRED)
 ========================= */
@@ -17,23 +28,23 @@ export const protect = async (req, res, next) => {
             // 🔐 VERIFY TOKEN
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            // ❗ VERY IMPORTANT: decoded.id must exist
             if (!decoded?.id) {
-                return res
-                    .status(401)
-                    .json({ message: "Invalid token payload" });
+                return res.status(401).json({ message: "Invalid token payload" });
             }
 
-            // 👤 FETCH USER
-            const user = await User.findById(decoded.id).select("-password");
+            // ✅ PEHLE User model mein dhundo
+            let user = await User.findById(decoded.id).select("-password");
+
+            // ✅ Agar User mein nahi mila AUR Admin model exist karta hai
+            // toh Admin model mein dhundo
+            if (!user && Admin) {
+                user = await Admin.findById(decoded.id).select("-password");
+            }
 
             if (!user) {
-                return res
-                    .status(401)
-                    .json({ message: "User not found" });
+                return res.status(401).json({ message: "User not found" });
             }
 
-            // ✅ ATTACH USER
             req.user = user;
 
             console.log("AUTH USER:", {
@@ -45,14 +56,10 @@ export const protect = async (req, res, next) => {
             next();
         } catch (error) {
             console.error("JWT ERROR:", error.message);
-            return res
-                .status(401)
-                .json({ message: "Not authorized, token invalid" });
+            return res.status(401).json({ message: "Not authorized, token invalid" });
         }
     } else {
-        return res
-            .status(401)
-            .json({ message: "Not authorized, token missing" });
+        return res.status(401).json({ message: "Not authorized, token missing" });
     }
 };
 

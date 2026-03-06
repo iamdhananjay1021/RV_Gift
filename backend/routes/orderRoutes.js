@@ -16,14 +16,12 @@ router.post("/", protect, createOrder);
 router.get("/my", protect, getMyOrders);
 
 /* ================= ADMIN ================= */
-router.get("/", adminOnly, getAllOrders);
+router.get("/", protect, adminOnly, getAllOrders);        // ✅ protect ADD kiya
 router.put("/:id", protect, adminOnly, updateOrderStatus);
 
-// ✅ CANCEL — patch hai, GET /:id se conflict nahi hoga
-// Isliye position theek hai, but safer hai pehle rakhna
 router.patch("/:id/cancel", protect, cancelOrder);
 
 /* ================= LAST ================= */
-router.get("/:id", protect, getOrderById); // ✅ ALWAYS LAST
+router.get("/:id", protect, getOrderById);
 
 export default router;
