@@ -14,18 +14,45 @@ const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
     secure: false,
-    family: 4, // ✅ Render free tier IPv4 fix
+    family: 4,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
 });
 
-// ✅ Verify on startup
+// ✅ Verify on startup — ab error clearly dikhega
 transporter.verify((err, success) => {
-    if (err) console.error("❌ Email transporter error:", err.message);
-    else console.log("✅ Email transporter ready");
+    if (err) {
+        console.error("❌ Email transporter error:", err.message);
+        console.error("   → Check EMAIL_USER and EMAIL_PASS in .env");
+        console.error("   → Gmail needs App Password, not normal password");
+        console.error("   → Generate at: myaccount.google.com/apppasswords");
+    } else {
+        console.log("✅ Email transporter ready — Gmail connected");
+    }
 });
+
+/* =========================
+   📤 SEND EMAIL HELPER
+========================= */
+const sendEmail = async ({ to, subject, html, label = "" }) => {
+    if (!to) {
+        console.log(`📧 [${label}] Skipped — no email address`);
+        return;
+    }
+    try {
+        await transporter.sendMail({
+            from: `"RV Gift Shop" <${process.env.EMAIL_USER}>`,
+            to,
+            subject,
+            html,
+        });
+        console.log(`✅ [${label}] Email sent to: ${to}`);
+    } catch (err) {
+        console.error(`❌ [${label}] Email failed: ${err.message}`);
+    }
+};
 
 /* =========================
    🛒 CREATE ORDER
@@ -94,45 +121,26 @@ export const createOrder = async (req, res) => {
             userWhatsApp: generateUserWhatsAppLink(savedOrder, "PLACED"),
         });
 
-        /* ── Emails (non-blocking) ── */
-        try {
-            const userEmail = email?.trim();
-            console.log("📧 EMAIL_USER:", process.env.EMAIL_USER);
-            console.log("📧 ADMIN_EMAIL:", process.env.ADMIN_EMAIL);
-            console.log("📧 User email:", userEmail || "NOT PROVIDED");
+        // ✅ Emails — non-blocking, helper use karo
+        const userMail = getOrderStatusEmailTemplate({
+            customerName: customerName.trim(),
+            orderId: savedOrder._id,
+            status: "PLACED",
+        });
 
-            const userMail = getOrderStatusEmailTemplate({
-                customerName: customerName.trim(),
-                orderId: savedOrder._id,
-                status: "PLACED",
-            });
-            const adminMailHTML = adminOrderEmailHTML({ order: savedOrder });
+        sendEmail({
+            to: email?.trim(),
+            subject: userMail.subject,
+            html: userMail.html,
+            label: "User/NewOrder",
+        });
 
-            // User email — sirf tab bhejo jab real email ho
-            if (userEmail) {
-                transporter.sendMail({
-                    from: `"RV Gift Shop" <${process.env.EMAIL_USER}>`,
-                    to: userEmail,
-                    subject: userMail.subject,
-                    html: userMail.html,
-                })
-                    .then(() => console.log("✅ User email sent to:", userEmail))
-                    .catch(err => console.error("❌ User email failed:", err.message));
-            }
-
-            // Admin email — hamesha bhejo
-            transporter.sendMail({
-                from: `"Order Bot" <${process.env.EMAIL_USER}>`,
-                to: process.env.ADMIN_EMAIL,
-                subject: `🛒 New Order #${savedOrder._id.toString().slice(-6).toUpperCase()} — ₹${totalAmount}`,
-                html: adminMailHTML,
-            })
-                .then(() => console.log("✅ Admin email sent"))
-                .catch(err => console.error("❌ Admin email failed:", err.message));
-
-        } catch (mailError) {
-            console.error("❌ Email process error:", mailError.message);
-        }
+        sendEmail({
+            to: process.env.ADMIN_EMAIL,
+            subject: `🛒 New Order #${savedOrder._id.toString().slice(-6).toUpperCase()} — ₹${totalAmount}`,
+            html: adminOrderEmailHTML({ order: savedOrder }),
+            label: "Admin/NewOrder",
+        });
 
     } catch (error) {
         console.error("CREATE ORDER ERROR:", error);
@@ -167,31 +175,25 @@ export const cancelOrder = async (req, res) => {
         order.cancellationReason = req.body.reason?.trim() || "Cancelled by customer";
         await order.save();
 
-        try {
-            const userMail = getOrderStatusEmailTemplate({
-                customerName: order.customerName,
-                orderId: order._id,
-                status: "CANCELLED",
-            });
-            if (order.email) {
-                transporter.sendMail({
-                    from: `"RV Gift Shop" <${process.env.EMAIL_USER}>`,
-                    to: order.email,
-                    subject: userMail.subject,
-                    html: userMail.html,
-                })
-                    .then(() => console.log("✅ Cancel email sent to user"))
-                    .catch(err => console.error("❌ Cancel user email failed:", err.message));
-            }
-            transporter.sendMail({
-                from: `"Order Bot" <${process.env.EMAIL_USER}>`,
-                to: process.env.ADMIN_EMAIL,
-                subject: `❌ Order Cancelled #${order._id.toString().slice(-6).toUpperCase()}`,
-                html: adminOrderEmailHTML({ order }),
-            })
-                .then(() => console.log("✅ Cancel admin email sent"))
-                .catch(err => console.error("❌ Cancel admin email failed:", err.message));
-        } catch { }
+        const cancelMail = getOrderStatusEmailTemplate({
+            customerName: order.customerName,
+            orderId: order._id,
+            status: "CANCELLED",
+        });
+
+        sendEmail({
+            to: order.email,
+            subject: cancelMail.subject,
+            html: cancelMail.html,
+            label: "User/Cancel",
+        });
+
+        sendEmail({
+            to: process.env.ADMIN_EMAIL,
+            subject: `❌ Order Cancelled #${order._id.toString().slice(-6).toUpperCase()}`,
+            html: adminOrderEmailHTML({ order }),
+            label: "Admin/Cancel",
+        });
 
         res.json({ success: true, message: "Order cancelled successfully", order });
 
@@ -271,37 +273,25 @@ export const updateOrderStatus = async (req, res) => {
         if (!order)
             return res.status(404).json({ message: "Order not found" });
 
-        try {
-            const userMail = getOrderStatusEmailTemplate({
-                customerName: order.customerName,
-                orderId: order._id,
-                status,
-            });
-            const adminMailHTML = adminOrderEmailHTML({ order });
+        const statusMail = getOrderStatusEmailTemplate({
+            customerName: order.customerName,
+            orderId: order._id,
+            status,
+        });
 
-            if (order.email) {
-                transporter.sendMail({
-                    from: `"RV Gift Shop" <${process.env.EMAIL_USER}>`,
-                    to: order.email,
-                    subject: userMail.subject,
-                    html: userMail.html,
-                })
-                    .then(() => console.log("✅ Status email sent to user"))
-                    .catch(err => console.error("❌ User status email failed:", err.message));
-            }
+        sendEmail({
+            to: order.email,
+            subject: statusMail.subject,
+            html: statusMail.html,
+            label: `User/Status-${status}`,
+        });
 
-            transporter.sendMail({
-                from: `"Order Bot" <${process.env.EMAIL_USER}>`,
-                to: process.env.ADMIN_EMAIL,
-                subject: `📦 Order ${status} | #${order._id.toString().slice(-6).toUpperCase()}`,
-                html: adminMailHTML,
-            })
-                .then(() => console.log("✅ Status admin email sent"))
-                .catch(err => console.error("❌ Admin status email failed:", err.message));
-
-        } catch (mailErr) {
-            console.error("❌ Status mail error:", mailErr.message);
-        }
+        sendEmail({
+            to: process.env.ADMIN_EMAIL,
+            subject: `📦 Order ${status} | #${order._id.toString().slice(-6).toUpperCase()}`,
+            html: adminOrderEmailHTML({ order }),
+            label: "Admin/StatusUpdate",
+        });
 
         res.json(order);
 
