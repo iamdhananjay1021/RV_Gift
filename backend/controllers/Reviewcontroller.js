@@ -3,27 +3,31 @@ import Product from "../models/Product.js";
 
 /* ── helper: recalculate avg rating on Product ── */
 const recalcProductRating = async (productId) => {
-    const stats = await Review.aggregate([
-        { $match: { product: productId } },
-        {
-            $group: {
-                _id: "$product",
-                avgRating: { $avg: "$rating" },
-                count: { $sum: 1 },
+    try {
+        const stats = await Review.aggregate([
+            { $match: { product: productId } },
+            {
+                $group: {
+                    _id: "$product",
+                    avgRating: { $avg: "$rating" },
+                    count: { $sum: 1 },
+                },
             },
-        },
-    ]);
+        ]);
 
-    if (stats.length > 0) {
-        await Product.findByIdAndUpdate(productId, {
-            rating: Math.round(stats[0].avgRating * 10) / 10,
-            numReviews: stats[0].count,
-        });
-    } else {
-        await Product.findByIdAndUpdate(productId, {
-            rating: 0,
-            numReviews: 0,
-        });
+        if (stats.length > 0) {
+            await Product.findByIdAndUpdate(productId, {
+                rating: Math.round(stats[0].avgRating * 10) / 10,
+                numReviews: stats[0].count,
+            });
+        } else {
+            await Product.findByIdAndUpdate(productId, {
+                rating: 0,
+                numReviews: 0,
+            });
+        }
+    } catch (err) {
+        console.error("RECALC RATING ERROR:", err.message);
     }
 };
 
@@ -36,14 +40,13 @@ export const addReview = async (req, res) => {
         const { rating, comment } = req.body;
         const productId = req.params.productId;
 
-        if (!rating || rating < 1 || rating > 5) {
+        if (!rating || Number(rating) < 1 || Number(rating) > 5)
             return res.status(400).json({ message: "Rating must be between 1 and 5" });
-        }
 
         const product = await Product.findById(productId);
-        if (!product) return res.status(404).json({ message: "Product not found" });
+        if (!product)
+            return res.status(404).json({ message: "Product not found" });
 
-        // Upsert: update if exists, create if not
         const review = await Review.findOneAndUpdate(
             { product: productId, user: req.user._id },
             {
@@ -73,26 +76,28 @@ export const getProductReviews = async (req, res) => {
     try {
         const reviews = await Review.find({ product: req.params.productId })
             .sort({ createdAt: -1 })
-            .limit(50);
+            .limit(50)
+            .lean(); // ✅ faster read
 
         res.json(reviews);
     } catch (error) {
+        console.error("GET REVIEWS ERROR:", error);
         res.status(500).json({ message: "Failed to fetch reviews" });
     }
 };
 
 /* =====================================================
-   🗑️ DELETE REVIEW (own review only)
+   🗑️ DELETE REVIEW
    DELETE /api/reviews/:reviewId
 ===================================================== */
 export const deleteReview = async (req, res) => {
     try {
         const review = await Review.findById(req.params.reviewId);
-        if (!review) return res.status(404).json({ message: "Review not found" });
+        if (!review)
+            return res.status(404).json({ message: "Review not found" });
 
-        if (review.user.toString() !== req.user._id.toString()) {
+        if (review.user.toString() !== req.user._id.toString())
             return res.status(403).json({ message: "Not authorized" });
-        }
 
         const productId = review.product;
         await review.deleteOne();
@@ -100,6 +105,7 @@ export const deleteReview = async (req, res) => {
 
         res.json({ success: true, message: "Review deleted" });
     } catch (error) {
+        console.error("DELETE REVIEW ERROR:", error);
         res.status(500).json({ message: "Failed to delete review" });
     }
 };

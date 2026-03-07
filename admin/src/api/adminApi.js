@@ -2,7 +2,7 @@ import axios from "axios";
 
 const adminApi = axios.create({
     baseURL: import.meta.env.VITE_API_URL || "http://localhost:9000/api",
-    timeout: 15000,
+    timeout: 60000, // ✅ 60 sec — Render cold start
 });
 
 adminApi.interceptors.request.use(
@@ -24,12 +24,10 @@ adminApi.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// ✅ Track karo kitne 401 aaye — ek baar ka 401 ignore karo (race condition fix)
 let consecutiveUnauthorized = 0;
 
 adminApi.interceptors.response.use(
     (response) => {
-        // ✅ Successful response — counter reset karo
         consecutiveUnauthorized = 0;
         return response;
     },
@@ -38,11 +36,6 @@ adminApi.interceptors.response.use(
             consecutiveUnauthorized++;
 
             const adminAuth = localStorage.getItem("adminAuth");
-
-            // ✅ Sirf tab logout karo jab:
-            // 1. Token storage mein hai
-            // 2. Login endpoint pe NAHI ho (login ka 401 = wrong password)
-            // 3. 2+ consecutive 401 aaye (genuine token expiry)
             const isLoginEndpoint = error.config?.url?.includes("/auth/login");
 
             if (adminAuth && !isLoginEndpoint && consecutiveUnauthorized >= 2) {
@@ -52,15 +45,11 @@ adminApi.interceptors.response.use(
                 if (!window.location.pathname.includes("/admin/login")) {
                     window.location.replace("/admin/login");
                 }
-            } else if (adminAuth && !isLoginEndpoint) {
-                // ✅ Pehla 401 — sirf warn karo, logout mat karo
-                console.warn("401 on:", error.config?.url, "— waiting to confirm token expiry");
             }
         }
 
         if (error.response?.status === 403) {
             console.warn("Admin access denied:", error.config?.url);
-            // ✅ 403 pe kabhi logout nahi
         }
 
         if (error.code === "ECONNABORTED") {

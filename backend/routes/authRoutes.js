@@ -1,5 +1,11 @@
 import express from "express";
-import { register, login, getProfile, saveLocation, getAllUsers } from "../controllers/authController.js";
+import {
+    register,
+    login,
+    getProfile,
+    saveLocation,
+    getAllUsers
+} from "../controllers/authController.js";
 import { protect, adminOnly } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
