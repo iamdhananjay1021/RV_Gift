@@ -33,13 +33,8 @@ const allowedOrigins = process.env.CORS_ORIGINS
         "https://rv-gift-admin.vercel.app",
     ];
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
-        console.warn("❌ CORS blocked:", origin);
-        callback(new Error("CORS not allowed"));
-    },
-    credentials: true,
+    origin: "*",
+    credentials: false,
 }));
 
 /* =========================
