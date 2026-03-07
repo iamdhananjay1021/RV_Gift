@@ -11,17 +11,11 @@ import { adminOrderEmailHTML } from "../utils/adminOrderEmail.js";
    📧 EMAIL CONFIG
 ========================= */
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,        // ← 465 se 587 karo
-    secure: false,    // ← true se false karo
+    service: "gmail",  // ← host/port hata ke sirf service use karo
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
-    tls: {
-        rejectUnauthorized: false,
-    },
-    family: 4,        // ← IPv4 force karo
 });
 
 transporter.verify((err) => {
