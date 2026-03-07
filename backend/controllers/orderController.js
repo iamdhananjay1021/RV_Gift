@@ -11,7 +11,7 @@ import { adminOrderEmailHTML } from "../utils/adminOrderEmail.js";
    📧 EMAIL CONFIG
 ========================= */
 const transporter = nodemailer.createTransport({
-    host: "74.125.133.108", // ✅ smtp.gmail.com ka IPv4 address directly
+    host: "smtp.gmail.com", // ✅ hostname
     port: 465,
     secure: true,
     auth: {
@@ -327,4 +327,3 @@ export const getAllOrders = async (req, res) => {
 };
 
 
-// wlco tkuz tplw cdnd

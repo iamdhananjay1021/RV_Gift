@@ -55,7 +55,7 @@ app.use(cors({
 }));
 
 // Handle preflight requests globally
-app.options("*", cors());
+// app.options("/(.*)", cors());
 
 /* =========================
    🛡️ SECURITY
