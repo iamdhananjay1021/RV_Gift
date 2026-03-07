@@ -13,22 +13,23 @@ const generateToken = (id, role) =>
     );
 
 /* ===============================
-   REGISTER (NORMAL USER ONLY)
+   REGISTER
 ================================ */
 export const register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        if (!name || !email || !password) {
+        if (!name?.trim() || !email?.trim() || !password?.trim())
             return res.status(400).json({ message: "All fields required" });
-        }
+
+        if (password.length < 6)
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
 
         const exists = await User.findOne({ email: email.toLowerCase().trim() });
-        if (exists) {
+        if (exists)
             return res.status(400).json({ message: "User already exists" });
-        }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 12); // ✅ 12 rounds
 
         const user = await User.create({
             name: name.trim(),
@@ -51,29 +52,27 @@ export const register = async (req, res) => {
 };
 
 /* ===============================
-   LOGIN (USER + ADMIN + OWNER)
+   LOGIN
 ================================ */
 export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        if (!email || !password) {
+        if (!email?.trim() || !password?.trim())
             return res.status(400).json({ message: "Email & password required" });
-        }
 
         const user = await User.findOne({ email: email.toLowerCase().trim() });
-        if (!user) {
+
+        // ✅ Same message for security — don't reveal if email exists
+        if (!user)
             return res.status(401).json({ message: "Invalid credentials" });
-        }
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
+        if (!isMatch)
             return res.status(401).json({ message: "Invalid credentials" });
-        }
 
-        if (!["user", "admin", "owner"].includes(user.role)) {
+        if (!["user", "admin", "owner"].includes(user.role))
             return res.status(403).json({ message: "Access denied" });
-        }
 
         return res.status(200).json({
             _id: user._id,
@@ -89,14 +88,13 @@ export const login = async (req, res) => {
 };
 
 /* ===============================
-   GET PROFILE (PROTECTED)
+   GET PROFILE
 ================================ */
 export const getProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user._id).select("-password");
-        if (!user) {
+        if (!user)
             return res.status(404).json({ message: "User not found" });
-        }
         res.json(user);
     } catch (error) {
         console.error("PROFILE ERROR:", error);
@@ -105,22 +103,28 @@ export const getProfile = async (req, res) => {
 };
 
 /* ===============================
-   ✅ SAVE LOCATION (PUBLIC)
+   SAVE LOCATION
 ================================ */
 export const saveLocation = async (req, res) => {
     try {
         const { userId, latitude, longitude, city, state } = req.body;
 
-        if (!userId) {
+        if (!userId)
             return res.status(400).json({ message: "userId required" });
-        }
+
+        // ✅ Validate coordinates
+        if (latitude && (latitude < -90 || latitude > 90))
+            return res.status(400).json({ message: "Invalid latitude" });
+
+        if (longitude && (longitude < -180 || longitude > 180))
+            return res.status(400).json({ message: "Invalid longitude" });
 
         await User.findByIdAndUpdate(userId, {
             $set: {
                 "location.latitude": latitude,
                 "location.longitude": longitude,
-                "location.city": city,
-                "location.state": state,
+                "location.city": city?.trim(),
+                "location.state": state?.trim(),
                 "location.updatedAt": new Date(),
             },
         });
@@ -133,7 +137,7 @@ export const saveLocation = async (req, res) => {
 };
 
 /* ===============================
-   ✅ GET ALL USERS (ADMIN)
+   GET ALL USERS (ADMIN)
 ================================ */
 export const getAllUsers = async (req, res) => {
     try {

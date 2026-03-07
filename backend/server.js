@@ -1,10 +1,8 @@
-
-
-
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import connectDB from "./config/db.js";
 
 // Routes
@@ -24,43 +22,49 @@ connectDB();
 const app = express();
 
 /* =========================
-
-
-/* =========================
-   🌐 CORS CONFIG (PRODUCTION SAFE)
+   🌐 CORS CONFIG
 ========================= */
 const allowedOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(",")
-    : ["http://localhost:5173"];
-
-// app.use(
-//     cors({
-//         origin: (origin, callback) => {
-//             if (!origin) return callback(null, true);
-//             if (allowedOrigins.includes(origin)) return callback(null, true);
-
-//             console.warn("❌ CORS blocked:", origin);
-//             callback(new Error("CORS not allowed"));
-//         },
-//         credentials: true,
-//     })
-// );
-
+    ? process.env.CORS_ORIGINS.split(",").map(o => o.trim())
+    : ["http://localhost:5173", "http://localhost:5174"];
 
 app.use(cors({
-    origin: true,
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        console.warn("❌ CORS blocked:", origin);
+        callback(new Error("CORS not allowed"));
+    },
     credentials: true,
 }));
 
-
-//    🛡️ SECURITY
-// ========================= */
+/* =========================
+   🛡️ SECURITY
+========================= */
 app.use(helmet());
 
-
-app.get("/api/test-cors", (req, res) => {
-    res.json({ message: "CORS TEST WORKING" });
+/* =========================
+   ⏱️ RATE LIMITING
+========================= */
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 10,
+    message: { message: "Too many attempts. Try after 15 minutes." },
+    standardHeaders: true,
+    legacyHeaders: false,
 });
+
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 min
+    max: 100,
+    message: { message: "Too many requests. Slow down." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+app.use("/api", apiLimiter);
 
 /* =========================
    🧩 BODY PARSERS
@@ -69,7 +73,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 /* =========================
-   📜 BASIC LOGGER (FREE HOSTING DEBUG)
+   📜 LOGGER
 ========================= */
 app.use((req, res, next) => {
     console.log(`${req.method} ${req.originalUrl}`);
@@ -123,10 +127,9 @@ app.use((err, req, res, next) => {
 
     res.status(err.status || 500).json({
         success: false,
-        message:
-            process.env.NODE_ENV === "production"
-                ? "Internal Server Error"
-                : err.message,
+        message: process.env.NODE_ENV === "production"
+            ? "Internal Server Error"
+            : err.message,
     });
 });
 
@@ -147,3 +150,9 @@ process.on("SIGTERM", () => {
     console.log("🛑 SIGTERM received. Shutting down...");
     server.close(() => process.exit(0));
 });
+
+process.on("SIGUSR2", () => {
+    server.close(() => process.exit(0));
+});
+
+export default app;
