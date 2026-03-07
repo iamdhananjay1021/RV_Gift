@@ -1,5 +1,5 @@
 import Order from "../models/Order.js";
-import nodemailer from "nodemailer";
+import { sendEmail } from "../utils/emailService.js";
 import {
     generateWhatsAppLink,
     generateUserWhatsAppLink,
@@ -8,59 +8,19 @@ import { getOrderStatusEmailTemplate } from "../utils/orderStatusEmail.js";
 import { adminOrderEmailHTML } from "../utils/adminOrderEmail.js";
 
 /* =========================
-   📧 EMAIL CONFIG
-========================= */
-const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    family: 4, // force IPv4 (fix Render issue)
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
-transporter.verify((err) => {
-    if (err) {
-        console.error("❌ Email transporter error:", err.message);
-        console.error("   → Check EMAIL_USER and EMAIL_PASS in .env");
-        console.error("   → Gmail needs App Password, not normal password");
-        console.error("   → Generate at: myaccount.google.com/apppasswords");
-    } else {
-        console.log("✅ Email transporter ready — Gmail connected");
-    }
-});
-
-/* =========================
-   📤 SEND EMAIL HELPER
-========================= */
-const sendEmail = async ({ to, subject, html, label = "" }) => {
-    if (!to) {
-        console.log(`📧 [${label}] Skipped — no email address`);
-        return;
-    }
-    try {
-        await transporter.sendMail({
-            from: `"RV Gift Shop" <${process.env.EMAIL_USER}>`,
-            to,
-            subject,
-            html,
-        });
-        console.log(`✅ [${label}] Email sent to: ${to}`);
-    } catch (err) {
-        console.error(`❌ [${label}] Email failed: ${err.message}`);
-        // ✅ Never throw — email failure should never crash the app
-    }
-};
-
-/* =========================
    🛒 CREATE ORDER
 ========================= */
 export const createOrder = async (req, res) => {
     try {
         const {
-            items, customerName, phone, address,
-            email, totalAmount, latitude, longitude,
+            items,
+            customerName,
+            phone,
+            address,
+            email,
+            totalAmount,
+            latitude,
+            longitude,
         } = req.body;
 
         if (!items || !Array.isArray(items) || items.length === 0)
@@ -74,6 +34,7 @@ export const createOrder = async (req, res) => {
 
         const formattedItems = items.map((item) => {
             let finalImage = "";
+
             if (typeof item.image === "string" && item.image) {
                 finalImage = item.image;
             } else if (Array.isArray(item.images) && item.images.length > 0) {
@@ -110,7 +71,6 @@ export const createOrder = async (req, res) => {
 
         const savedOrder = await order.save();
 
-        // ✅ Response pehle bhejo — email baad mein
         res.status(201).json({
             success: true,
             orderId: savedOrder._id,
@@ -134,11 +94,13 @@ export const createOrder = async (req, res) => {
 
         sendEmail({
             to: process.env.ADMIN_EMAIL,
-            subject: `🛒 New Order #${savedOrder._id.toString().slice(-6).toUpperCase()} — ₹${totalAmount}`,
+            subject: `🛒 New Order #${savedOrder._id
+                .toString()
+                .slice(-6)
+                .toUpperCase()} — ₹${totalAmount}`,
             html: adminOrderEmailHTML({ order: savedOrder }),
             label: "Admin/NewOrder",
         });
-
     } catch (error) {
         console.error("CREATE ORDER ERROR:", error);
         res.status(500).json({ message: "Order placement failed. Please try again." });
@@ -146,7 +108,7 @@ export const createOrder = async (req, res) => {
 };
 
 /* =========================
-   ❌ CANCEL ORDER (USER)
+   ❌ CANCEL ORDER
 ========================= */
 export const cancelOrder = async (req, res) => {
     try {
@@ -159,34 +121,31 @@ export const cancelOrder = async (req, res) => {
             return res.status(403).json({ message: "Not authorized" });
 
         const cancellableStatuses = ["PLACED", "CONFIRMED"];
-        if (!cancellableStatuses.includes(order.orderStatus)) {
-            const msg = order.orderStatus === "CANCELLED"
-                ? "Order is already cancelled"
-                : `Cannot cancel — order is already ${order.orderStatus.toLowerCase()}`;
-            return res.status(400).json({ message: msg });
-        }
+
+        if (!cancellableStatuses.includes(order.orderStatus))
+            return res.status(400).json({
+                message: `Cannot cancel — order is already ${order.orderStatus.toLowerCase()}`,
+            });
 
         order.orderStatus = "CANCELLED";
-        // ✅ FIX — optional chaining, req.body undefined safe
-        order.cancellationReason = req.body?.reason?.trim() || "Cancelled by customer";
-
-        // ✅ FIX — statusTimeline nested object Mongoose update
-        const existingTimeline = order.statusTimeline?.toObject
-            ? order.statusTimeline.toObject()
-            : { ...order.statusTimeline };
+        order.cancellationReason =
+            req.body?.reason?.trim() || "Cancelled by customer";
 
         order.statusTimeline = {
-            ...existingTimeline,
+            ...order.statusTimeline,
             cancelledAt: new Date(),
         };
+
         order.markModified("statusTimeline");
 
         await order.save();
 
-        // ✅ Response pehle bhejo
-        res.json({ success: true, message: "Order cancelled successfully", order });
+        res.json({
+            success: true,
+            message: "Order cancelled successfully",
+            order,
+        });
 
-        // Email baad mein — non-blocking
         const cancelMail = getOrderStatusEmailTemplate({
             customerName: order.customerName,
             orderId: order._id,
@@ -202,11 +161,13 @@ export const cancelOrder = async (req, res) => {
 
         sendEmail({
             to: process.env.ADMIN_EMAIL,
-            subject: `❌ Order Cancelled #${order._id.toString().slice(-6).toUpperCase()}`,
+            subject: `❌ Order Cancelled #${order._id
+                .toString()
+                .slice(-6)
+                .toUpperCase()}`,
             html: adminOrderEmailHTML({ order }),
             label: "Admin/Cancel",
         });
-
     } catch (error) {
         console.error("CANCEL ORDER ERROR:", error);
         res.status(500).json({ message: "Failed to cancel order" });
@@ -221,6 +182,7 @@ export const getMyOrders = async (req, res) => {
         const orders = await Order.find({ user: req.user._id })
             .sort({ createdAt: -1 })
             .lean();
+
         res.json(orders);
     } catch (error) {
         console.error("GET MY ORDERS ERROR:", error);
@@ -252,21 +214,27 @@ export const getOrderById = async (req, res) => {
 };
 
 /* =========================
-   🔄 UPDATE ORDER STATUS (ADMIN)
+   🔄 UPDATE ORDER STATUS
 ========================= */
 export const updateOrderStatus = async (req, res) => {
     try {
         const { status } = req.body;
 
         const validStatuses = [
-            "PLACED", "CONFIRMED", "PACKED",
-            "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"
+            "PLACED",
+            "CONFIRMED",
+            "PACKED",
+            "SHIPPED",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
+            "CANCELLED",
         ];
 
         if (!validStatuses.includes(status))
             return res.status(400).json({ message: "Invalid status value" });
 
         const update = { orderStatus: status };
+
         if (status === "CONFIRMED") update["statusTimeline.confirmedAt"] = new Date();
         if (status === "PACKED") update["statusTimeline.packedAt"] = new Date();
         if (status === "SHIPPED") update["statusTimeline.shippedAt"] = new Date();
@@ -284,7 +252,6 @@ export const updateOrderStatus = async (req, res) => {
 
         res.json(order);
 
-        // Email baad mein — non-blocking
         const statusMail = getOrderStatusEmailTemplate({
             customerName: order.customerName,
             orderId: order._id,
@@ -300,11 +267,13 @@ export const updateOrderStatus = async (req, res) => {
 
         sendEmail({
             to: process.env.ADMIN_EMAIL,
-            subject: `📦 Order ${status} | #${order._id.toString().slice(-6).toUpperCase()}`,
+            subject: `📦 Order ${status} | #${order._id
+                .toString()
+                .slice(-6)
+                .toUpperCase()}`,
             html: adminOrderEmailHTML({ order }),
             label: "Admin/StatusUpdate",
         });
-
     } catch (error) {
         console.error("UPDATE ORDER STATUS ERROR:", error);
         res.status(500).json({ message: "Failed to update order status" });
@@ -312,18 +281,17 @@ export const updateOrderStatus = async (req, res) => {
 };
 
 /* =========================
-   🧾 GET ALL ORDERS (ADMIN)
+   🧾 GET ALL ORDERS
 ========================= */
 export const getAllOrders = async (req, res) => {
     try {
         const orders = await Order.find()
             .sort({ createdAt: -1 })
             .lean();
+
         res.json(orders);
     } catch (error) {
         console.error("GET ALL ORDERS ERROR:", error);
         res.status(500).json({ message: "Failed to fetch all orders" });
     }
 };
-
-
