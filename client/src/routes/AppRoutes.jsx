@@ -12,6 +12,8 @@ import OrderSuccess from "../pages/OrderSuccess";
 import ProductDetails from "../components/ProductDetails";
 import Profile from "../pages/Profile";
 import Wishlist from "../pages/Wishlist";
+import ForgotPassword from "../pages/Forgotpassword";
+import ResetPassword from "../pages/Resetpassword";
 
 const ScrollToTop = () => {
     const { pathname } = useLocation();
@@ -29,6 +31,8 @@ const AppRoutes = () => {
                 <Route path="/products/:id" element={<ProductDetails />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password/:token" element={<ResetPassword />} />
 
                 {/* PROTECTED */}
                 <Route element={<ProtectedRoute />}>

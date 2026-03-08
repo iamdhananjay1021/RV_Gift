@@ -26,14 +26,16 @@ const userSchema = new mongoose.Schema(
             type: String,
             required: [true, "Password is required"],
             minlength: [6, "Password must be at least 6 characters"],
-            // ✅ Validation controller mein karo — model mein nahi
-            // Bcrypt hash yahan validate nahi hoga
         },
         role: {
             type: String,
             enum: ["user", "admin", "owner"],
             default: "user",
         },
+
+        // ── Password Reset ──
+        passwordResetToken: { type: String },
+        passwordResetExpires: { type: Date },
     },
     { timestamps: true }
 );

@@ -53,7 +53,6 @@ const Login = () => {
             `}</style>
 
             <div className="auth-font w-full max-w-md fade-up">
-                {/* Card */}
                 <div className="bg-white rounded-3xl shadow-xl shadow-stone-200/80 border border-stone-100 overflow-hidden">
 
                     {/* Top accent */}
@@ -78,9 +77,12 @@ const Login = () => {
                         )}
 
                         <form onSubmit={submitHandler} className="space-y-5">
+
                             {/* Email */}
                             <div>
-                                <label className="text-xs font-bold text-zinc-500 mb-1.5 block uppercase tracking-wide">Email Address</label>
+                                <label className="text-xs font-bold text-zinc-500 mb-1.5 block uppercase tracking-wide">
+                                    Email Address
+                                </label>
                                 <div className="relative">
                                     <FaEnvelope className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={13} />
                                     <input
@@ -95,7 +97,16 @@ const Login = () => {
 
                             {/* Password */}
                             <div>
-                                <label className="text-xs font-bold text-zinc-500 mb-1.5 block uppercase tracking-wide">Password</label>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">
+                                        Password
+                                    </label>
+                                    <Link
+                                        to="/forgot-password"
+                                        className="text-xs text-amber-600 font-bold hover:text-amber-700 transition-colors">
+                                        Forgot Password?
+                                    </Link>
+                                </div>
                                 <div className="relative">
                                     <FaLock className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={13} />
                                     <input

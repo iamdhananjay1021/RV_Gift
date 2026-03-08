@@ -3,8 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/adminApi";
 import {
     FaPlus, FaSync, FaEdit, FaTrash, FaSearch,
-    FaBoxOpen, FaTag, FaCheckCircle, FaTimesCircle,
-    FaSortAmountDown, FaFilter
+    FaBoxOpen, FaCheckCircle, FaTimesCircle,
 } from "react-icons/fa";
 
 const AdminProducts = () => {
@@ -16,6 +15,12 @@ const AdminProducts = () => {
     const [search, setSearch] = useState("");
     const [deletingId, setDeletingId] = useState(null);
     const [confirmId, setConfirmId] = useState(null);
+    const [toast, setToast] = useState(null);
+
+    const showToast = (type, msg) => {
+        setToast({ type, msg });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     // ── Fetch ──
     const fetchProducts = useCallback(async () => {
@@ -53,9 +58,10 @@ const AdminProducts = () => {
             await api.delete(`/products/${id}`);
             setProducts(prev => prev.filter(p => p._id !== id));
             setFiltered(prev => prev.filter(p => p._id !== id));
+            showToast("success", "Product deleted successfully!");
         } catch (err) {
             console.error("DELETE ERROR:", err);
-            alert("Failed to delete product");
+            showToast("error", "Failed to delete product");
         } finally {
             setDeletingId(null);
             setConfirmId(null);
@@ -68,7 +74,8 @@ const AdminProducts = () => {
         setTimeout(() => setRefreshing(false), 600);
     };
 
-    const formatCat = (cat) => cat?.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase()) || "—";
+    const formatCat = (cat) =>
+        cat?.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase()) || "—";
 
     // ── Loading ──
     if (loading) return (
@@ -86,7 +93,8 @@ const AdminProducts = () => {
             <div className="text-center bg-white rounded-2xl p-10 border border-stone-200 shadow-sm">
                 <p className="text-4xl mb-3">⚠️</p>
                 <p className="text-zinc-700 font-bold mb-4">{error}</p>
-                <button onClick={fetchProducts} className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-zinc-800 transition-colors">
+                <button onClick={fetchProducts}
+                    className="px-6 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold hover:bg-zinc-800 transition-colors">
                     Retry
                 </button>
             </div>
@@ -94,10 +102,38 @@ const AdminProducts = () => {
     );
 
     return (
-        <div className="min-h-screen bg-stone-50">
-            <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'); .admin-root { font-family: 'DM Sans', sans-serif; }`}</style>
+        <div className="min-h-screen bg-stone-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+                @keyframes slideInRight {
+                    from { opacity: 0; transform: translateX(60px); }
+                    to   { opacity: 1; transform: translateX(0); }
+                }
+            `}</style>
 
-            <div className="admin-root max-w-7xl mx-auto px-4 py-8">
+            {/* ── TOAST ── */}
+            {toast && (
+                <div style={{
+                    position: "fixed", top: 24, right: 24, zIndex: 9999,
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "13px 20px",
+                    background: toast.type === "success"
+                        ? "linear-gradient(135deg,#10b981,#059669)"
+                        : "linear-gradient(135deg,#ef4444,#dc2626)",
+                    color: "#fff", borderRadius: 14, fontWeight: 700, fontSize: 14,
+                    boxShadow: "0 8px 30px rgba(0,0,0,0.2)",
+                    animation: "slideInRight 0.3s cubic-bezier(0.16,1,0.3,1)",
+                    fontFamily: "'DM Sans', sans-serif",
+                    minWidth: 240,
+                }}>
+                    <span style={{ fontSize: 20 }}>
+                        {toast.type === "success" ? "✅" : "❌"}
+                    </span>
+                    {toast.msg}
+                </div>
+            )}
+
+            <div className="max-w-7xl mx-auto px-4 py-8">
 
                 {/* ── Header ── */}
                 <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
@@ -111,7 +147,7 @@ const AdminProducts = () => {
                         <button
                             onClick={refreshProducts}
                             disabled={refreshing}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-stone-200 text-zinc-600 rounded-xl text-sm font-semibold hover:bg-stone-50 hover:border-stone-300 transition-all disabled:opacity-50"
+                            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-stone-200 text-zinc-600 rounded-xl text-sm font-semibold hover:bg-stone-50 hover:border-stone-300 transition-all disabled:opacity-50 cursor-pointer"
                         >
                             <FaSync size={12} className={refreshing ? "animate-spin" : ""} />
                             {refreshing ? "Refreshing..." : "Refresh"}
@@ -128,12 +164,12 @@ const AdminProducts = () => {
                 {/* ── Stats Row ── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                     {[
-                        { label: "Total Products", value: products.length, color: "text-zinc-800", bg: "bg-white" },
+                        { label: "Total Products", value: products.length, color: "text-zinc-800", bg: "bg-white border-stone-200" },
                         { label: "Customizable", value: products.filter(p => p.isCustomizable).length, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-100" },
                         { label: "Categories", value: [...new Set(products.map(p => p.category))].filter(Boolean).length, color: "text-amber-600", bg: "bg-amber-50 border-amber-100" },
                         { label: "Avg Price", value: `₹${products.length ? Math.round(products.reduce((s, p) => s + p.price, 0) / products.length).toLocaleString("en-IN") : 0}`, color: "text-blue-600", bg: "bg-blue-50 border-blue-100" },
                     ].map(({ label, value, color, bg }) => (
-                        <div key={label} className={`${bg} border border-stone-200 rounded-2xl px-4 py-3`}>
+                        <div key={label} className={`${bg} border rounded-2xl px-4 py-3`}>
                             <p className="text-xs text-zinc-400 font-medium mb-0.5">{label}</p>
                             <p className={`text-xl font-black ${color}`}>{value}</p>
                         </div>
@@ -148,10 +184,11 @@ const AdminProducts = () => {
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Search by name or category..."
-                        className="w-full pl-10 pr-4 py-3 bg-white border border-stone-200 rounded-xl text-sm text-zinc-700 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all"
+                        className="w-full pl-10 pr-10 py-3 bg-white border border-stone-200 rounded-xl text-sm text-zinc-700 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent transition-all"
                     />
                     {search && (
-                        <button onClick={() => setSearch("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                        <button onClick={() => setSearch("")}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 cursor-pointer">
                             ✕
                         </button>
                     )}
@@ -168,13 +205,15 @@ const AdminProducts = () => {
                             {search ? "Try a different search term" : "Add your first product to get started"}
                         </p>
                         {!search && (
-                            <Link to="/admin/products/new" className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition-all">
+                            <Link to="/admin/products/new"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 transition-all">
                                 <FaPlus size={11} /> Add First Product
                             </Link>
                         )}
                     </div>
                 ) : (
                     <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden">
+
                         {/* Table Header */}
                         <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-stone-50 border-b border-stone-100 text-xs font-bold text-zinc-400 uppercase tracking-wider">
                             <div className="col-span-1">#</div>
@@ -194,21 +233,19 @@ const AdminProducts = () => {
                                 const isConfirming = confirmId === product._id;
 
                                 return (
-                                    <div
-                                        key={product._id}
-                                        className={`grid grid-cols-12 gap-3 px-5 py-4 items-center hover:bg-stone-50 transition-colors duration-150 ${isDeleting ? "opacity-50" : ""}`}
-                                    >
+                                    <div key={product._id}
+                                        className={`grid grid-cols-12 gap-3 px-5 py-4 items-center hover:bg-stone-50 transition-colors duration-150 ${isDeleting ? "opacity-50" : ""}`}>
+
                                         {/* Index */}
                                         <div className="col-span-1 text-xs text-zinc-400 font-medium">{idx + 1}</div>
 
                                         {/* Image */}
                                         <div className="col-span-1">
                                             <div className="w-10 h-10 rounded-lg bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center shrink-0">
-                                                {imageUrl ? (
-                                                    <img src={imageUrl} alt={product.name} className="w-full h-full object-contain p-1" />
-                                                ) : (
-                                                    <FaBoxOpen size={14} className="text-stone-400" />
-                                                )}
+                                                {imageUrl
+                                                    ? <img src={imageUrl} alt={product.name} className="w-full h-full object-contain p-1" />
+                                                    : <FaBoxOpen size={14} className="text-stone-400" />
+                                                }
                                             </div>
                                         </div>
 
@@ -255,13 +292,13 @@ const AdminProducts = () => {
                                                     <button
                                                         onClick={() => deleteHandler(product._id)}
                                                         disabled={isDeleting}
-                                                        className="px-2 py-1 bg-red-500 text-white rounded-lg text-[11px] font-bold hover:bg-red-600 transition-colors disabled:opacity-50"
+                                                        className="px-2 py-1 bg-red-500 text-white rounded-lg text-[11px] font-bold hover:bg-red-600 transition-colors disabled:opacity-50 cursor-pointer"
                                                     >
                                                         {isDeleting ? "..." : "Yes"}
                                                     </button>
                                                     <button
                                                         onClick={() => setConfirmId(null)}
-                                                        className="px-2 py-1 bg-stone-100 text-zinc-600 rounded-lg text-[11px] font-bold hover:bg-stone-200 transition-colors"
+                                                        className="px-2 py-1 bg-stone-100 text-zinc-600 rounded-lg text-[11px] font-bold hover:bg-stone-200 transition-colors cursor-pointer"
                                                     >
                                                         No
                                                     </button>
@@ -269,7 +306,7 @@ const AdminProducts = () => {
                                             ) : (
                                                 <button
                                                     onClick={() => setConfirmId(product._id)}
-                                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 border border-red-200 text-red-400 hover:bg-red-500 hover:text-white transition-all duration-150"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 border border-red-200 text-red-400 hover:bg-red-500 hover:text-white transition-all duration-150 cursor-pointer"
                                                     title="Delete"
                                                 >
                                                     <FaTrash size={11} />
@@ -284,12 +321,11 @@ const AdminProducts = () => {
                         {/* Footer */}
                         <div className="px-5 py-3 bg-stone-50 border-t border-stone-100 flex items-center justify-between">
                             <p className="text-xs text-zinc-400">
-                                Showing <span className="font-semibold text-zinc-600">{filtered.length}</span> of <span className="font-semibold text-zinc-600">{products.length}</span> products
+                                Showing <span className="font-semibold text-zinc-600">{filtered.length}</span> of{" "}
+                                <span className="font-semibold text-zinc-600">{products.length}</span> products
                             </p>
-                            <Link
-                                to="/admin/products/new"
-                                className="flex items-center gap-1.5 text-xs text-amber-600 font-bold hover:text-amber-700 transition-colors"
-                            >
+                            <Link to="/admin/products/new"
+                                className="flex items-center gap-1.5 text-xs text-amber-600 font-bold hover:text-amber-700 transition-colors">
                                 <FaPlus size={10} /> Add New
                             </Link>
                         </div>

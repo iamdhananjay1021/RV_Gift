@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/adminApi";
 import {
     FaArrowLeft, FaUpload, FaTimes, FaPlus,
-    FaTag, FaRupeeSign, FaList, FaCheckCircle
+    FaTag, FaRupeeSign, FaList
 } from "react-icons/fa";
 import { CATEGORIES } from "../data/categories";
 
@@ -27,13 +27,15 @@ const AdminEditProduct = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
-    const [success, setSuccess] = useState(false);
+    const [toast, setToast] = useState(null);
 
-    // ✅ Sizes
     const [selectedSizes, setSelectedSizes] = useState([]);
-
-    // ✅ Highlights
     const [highlights, setHighlights] = useState([{ key: "", value: "" }]);
+
+    const showToast = (type, msg) => {
+        setToast({ type, msg });
+        setTimeout(() => setToast(null), 3000);
+    };
 
     /* ── Load Product ── */
     useEffect(() => {
@@ -51,12 +53,10 @@ const AdminEditProduct = () => {
                 });
                 setCurrentImages(data.images || []);
 
-                // ✅ Load existing sizes
                 if (data.sizes?.length > 0) {
                     setSelectedSizes(data.sizes);
                 }
 
-                // ✅ Load existing highlights
                 if (data.highlights && Object.keys(data.highlights).length > 0) {
                     const entries = data.highlights instanceof Map
                         ? [...data.highlights.entries()]
@@ -127,21 +127,19 @@ const AdminEditProduct = () => {
             formData.append("isCustomizable", form.isCustomizable ? "true" : "false");
             if (form.tags.trim()) formData.append("tags", form.tags.trim());
             images.forEach(img => formData.append("images", img));
-
-            // ✅ Sizes
             formData.append("sizes", JSON.stringify(selectedSizes));
 
-            // ✅ Highlights — only non-empty pairs
             const validHighlights = highlights.filter(h => h.key.trim() && h.value.trim());
             const highlightObj = {};
             validHighlights.forEach(h => { highlightObj[h.key.trim()] = h.value.trim(); });
             formData.append("highlights", JSON.stringify(highlightObj));
 
             await api.put(`/products/${id}`, formData);
-            setSuccess(true);
-            setTimeout(() => navigate("/admin/products"), 1200);
+            showToast("success", "Product updated successfully! ✨");
+            setTimeout(() => navigate("/admin/products"), 1500);
         } catch (err) {
             setError(err.response?.data?.message || "Failed to update product");
+            showToast("error", "Failed to update product");
         } finally {
             setSaving(false);
         }
@@ -155,14 +153,40 @@ const AdminEditProduct = () => {
 
     return (
         <div className="min-h-screen bg-stone-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-            <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');`}</style>
+            <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+                @keyframes slideInRight {
+                    from { opacity: 0; transform: translateX(60px); }
+                    to   { opacity: 1; transform: translateX(0); }
+                }
+            `}</style>
+
+            {/* ── TOAST ── */}
+            {toast && (
+                <div style={{
+                    position: "fixed", top: 24, right: 24, zIndex: 9999,
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "13px 20px",
+                    background: toast.type === "success"
+                        ? "linear-gradient(135deg,#f59e0b,#f97316)"
+                        : "linear-gradient(135deg,#ef4444,#dc2626)",
+                    color: "#fff", borderRadius: 14, fontWeight: 700, fontSize: 14,
+                    boxShadow: "0 8px 30px rgba(0,0,0,0.2)",
+                    animation: "slideInRight 0.3s cubic-bezier(0.16,1,0.3,1)",
+                    fontFamily: "'DM Sans', sans-serif",
+                    minWidth: 240,
+                }}>
+                    <span style={{ fontSize: 20 }}>{toast.type === "success" ? "✅" : "❌"}</span>
+                    {toast.msg}
+                </div>
+            )}
 
             <div className="max-w-3xl mx-auto px-4 py-8">
 
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-6">
                     <button onClick={() => navigate("/admin/products")}
-                        className="w-9 h-9 rounded-full bg-white border border-stone-200 flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-all">
+                        className="w-9 h-9 rounded-full bg-white border border-stone-200 flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-all cursor-pointer">
                         <FaArrowLeft size={13} />
                     </button>
                     <div>
@@ -187,7 +211,8 @@ const AdminEditProduct = () => {
                         <div>
                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1.5 block">Description</label>
                             <textarea name="description" value={form.description} onChange={handleChange}
-                                placeholder="Describe your product..." rows={3} className={`${inputClass} resize-none`} />
+                                placeholder="Describe your product..." rows={3}
+                                className={`${inputClass} resize-none`} />
                         </div>
 
                         {/* Price + Category */}
@@ -227,7 +252,7 @@ const AdminEditProduct = () => {
                             </div>
                         </div>
 
-                        {/* ✅ SIZES */}
+                        {/* Sizes */}
                         <div>
                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-2 block">
                                 Available Sizes <span className="text-zinc-400 font-normal normal-case">(optional)</span>
@@ -235,9 +260,9 @@ const AdminEditProduct = () => {
                             <div className="flex flex-wrap gap-2">
                                 {ALL_SIZES.map(size => (
                                     <button key={size} type="button" onClick={() => toggleSize(size)}
-                                        className={`w-12 h-10 rounded-xl text-sm font-bold border transition-all ${selectedSizes.includes(size)
-                                                ? "bg-zinc-900 text-white border-zinc-900"
-                                                : "bg-white text-zinc-600 border-stone-200 hover:border-zinc-400"
+                                        className={`w-12 h-10 rounded-xl text-sm font-bold border transition-all cursor-pointer ${selectedSizes.includes(size)
+                                            ? "bg-zinc-900 text-white border-zinc-900"
+                                            : "bg-white text-zinc-600 border-stone-200 hover:border-zinc-400"
                                             }`}>
                                         {size}
                                     </button>
@@ -250,7 +275,7 @@ const AdminEditProduct = () => {
                             )}
                         </div>
 
-                        {/* ✅ HIGHLIGHTS */}
+                        {/* Highlights */}
                         <div>
                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-2 block">
                                 Product Highlights <span className="text-zinc-400 font-normal normal-case">(optional)</span>
@@ -268,14 +293,14 @@ const AdminEditProduct = () => {
                                             className="flex-1 px-3 py-2.5 border border-stone-200 rounded-xl text-sm bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-400 text-zinc-700" />
                                         {highlights.length > 1 && (
                                             <button type="button" onClick={() => removeHighlight(idx)}
-                                                className="w-8 h-8 flex items-center justify-center text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-all">
+                                                className="w-8 h-8 flex items-center justify-center text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-all cursor-pointer">
                                                 <FaTimes size={12} />
                                             </button>
                                         )}
                                     </div>
                                 ))}
                                 <button type="button" onClick={addHighlight}
-                                    className="flex items-center gap-1.5 text-xs text-amber-600 font-bold hover:text-amber-700 mt-1">
+                                    className="flex items-center gap-1.5 text-xs text-amber-600 font-bold hover:text-amber-700 mt-1 cursor-pointer">
                                     <FaPlus size={9} /> Add highlight
                                 </button>
                             </div>
@@ -288,8 +313,11 @@ const AdminEditProduct = () => {
                                 <div className="grid grid-cols-4 gap-3">
                                     {currentImages.map((img, i) => (
                                         <div key={i} className="relative">
-                                            <img src={img.url} alt={`product ${i + 1}`} className="w-full h-20 object-cover rounded-xl border border-stone-200" />
-                                            {i === 0 && <span className="absolute bottom-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">Main</span>}
+                                            <img src={img.url} alt={`product ${i + 1}`}
+                                                className="w-full h-20 object-cover rounded-xl border border-stone-200" />
+                                            {i === 0 && (
+                                                <span className="absolute bottom-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">Main</span>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -314,12 +342,15 @@ const AdminEditProduct = () => {
                                 <div className="grid grid-cols-4 gap-3 mt-3">
                                     {previewImages.map((img, i) => (
                                         <div key={i} className="relative group">
-                                            <img src={img} alt={`preview ${i + 1}`} className="w-full h-20 object-cover rounded-xl border border-stone-200" />
+                                            <img src={img} alt={`preview ${i + 1}`}
+                                                className="w-full h-20 object-cover rounded-xl border border-stone-200" />
                                             <button type="button" onClick={() => removeNewImage(i)}
-                                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                                                 <FaTimes size={8} />
                                             </button>
-                                            {i === 0 && <span className="absolute bottom-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">Main</span>}
+                                            {i === 0 && (
+                                                <span className="absolute bottom-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">Main</span>
+                                            )}
                                         </div>
                                     ))}
                                     {previewImages.length < 5 && (
@@ -340,31 +371,31 @@ const AdminEditProduct = () => {
                             </div>
                             <button type="button"
                                 onClick={() => setForm(prev => ({ ...prev, isCustomizable: !prev.isCustomizable }))}
-                                className={`relative w-11 h-6 rounded-full transition-all duration-300 ${form.isCustomizable ? "bg-amber-500" : "bg-stone-300"}`}>
+                                className={`relative w-11 h-6 rounded-full transition-all duration-300 cursor-pointer ${form.isCustomizable ? "bg-amber-500" : "bg-stone-300"}`}>
                                 <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${form.isCustomizable ? "left-5" : "left-0.5"}`} />
                             </button>
                         </div>
 
-                        {/* Error / Success */}
+                        {/* Error */}
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-medium">⚠️ {error}</div>
-                        )}
-                        {success && (
-                            <div className="bg-emerald-50 border border-emerald-200 text-emerald-600 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2">
-                                <FaCheckCircle /> Product updated! Redirecting...
+                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-medium">
+                                ⚠️ {error}
                             </div>
                         )}
 
                         {/* Buttons */}
                         <div className="flex gap-3 pt-2">
                             <button type="button" onClick={() => navigate("/admin/products")}
-                                className="flex-1 py-3 rounded-xl border border-stone-200 text-zinc-600 font-semibold text-sm hover:bg-stone-50 transition-all">
+                                className="flex-1 py-3 rounded-xl border border-stone-200 text-zinc-600 font-semibold text-sm hover:bg-stone-50 transition-all cursor-pointer">
                                 Cancel
                             </button>
                             <button type="submit" disabled={saving}
-                                className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm transition-all active:scale-95 disabled:opacity-60 shadow-md shadow-amber-200 flex items-center justify-center gap-2">
+                                className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm transition-all active:scale-95 disabled:opacity-60 shadow-md shadow-amber-200 flex items-center justify-center gap-2 cursor-pointer">
                                 {saving ? (
-                                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Updating...</>
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Updating...
+                                    </>
                                 ) : "Update Product"}
                             </button>
                         </div>
